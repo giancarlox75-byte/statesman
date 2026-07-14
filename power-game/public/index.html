@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POWER — A Political Simulation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<div id="authScreen" class="auth-box hidden">
+  <div class="masthead-title" style="margin-bottom:16px;">
+    <svg class="seal" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#B8892B" stroke-width="3"/><circle cx="50" cy="50" r="38" fill="none" stroke="#1B2A4A" stroke-width="1.5"/><path d="M50 20 L58 45 L84 45 L63 60 L71 85 L50 70 L29 85 L37 60 L16 45 L42 45 Z" fill="#A32638"/></svg>
+    <div>
+      <p class="kicker" style="margin:0;">Est. 2026 &middot; A Political Simulation</p>
+      <h1 style="font-size:22px;">POWER</h1>
+    </div>
+  </div>
+  <div class="auth-tabs">
+    <button class="btn secondary" id="showLogin">Sign In</button>
+    <button class="btn secondary" id="showRegister">Register</button>
+  </div>
+  <div id="authMsg"></div>
+  <form id="authForm">
+    <label>Email</label>
+    <input type="email" id="authEmail" required>
+    <label>Password</label>
+    <input type="password" id="authPassword" required minlength="6">
+    <div class="btn-row">
+      <button type="submit" class="btn red" id="authSubmit" style="width:100%;">Sign In</button>
+    </div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <div class="masthead">
+    <div class="masthead-title">
+      <svg class="seal" viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="none" stroke="#B8892B" stroke-width="3"/><circle cx="50" cy="50" r="38" fill="none" stroke="#1B2A4A" stroke-width="1.5"/><path d="M50 20 L58 45 L84 45 L63 60 L71 85 L50 70 L29 85 L37 60 L16 45 L42 45 Z" fill="#A32638"/></svg>
+      <div>
+        <p class="kicker" style="margin:0;">Est. 2026 &middot; A Political Simulation</p>
+        <h1>POWER</h1>
+      </div>
+    </div>
+    <div class="session-box">
+      <div id="whoami">—</div>
+      <button class="btn secondary" id="logoutBtn">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="ticker">
+    <div class="ticker-track" id="tickerTrack">Loading dispatches&hellip;</div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <div class="tab active" data-tab="profile">Profile</div>
+    <div class="tab" data-tab="actions">Campaign</div>
+    <div class="tab" data-tab="elections">Elections</div>
+    <div class="tab" data-tab="congress">Congress</div>
+    <div class="tab" data-tab="directory">Directory</div>
+  </div>
+
+  <main>
+    <div class="panel">
+
+      <div id="noPoliticianNotice" class="hidden">
+        <h2 class="section-title">Declare Your Candidacy</h2>
+        <p class="section-sub">Every politician starts somewhere. Create your character to enter the game.</p>
+        <div id="createMsg"></div>
+        <form id="createForm">
+          <label>Full Name</label>
+          <input type="text" id="cName" required maxlength="60" placeholder="e.g. Alex Rivera">
+          <label>Home State (2-letter code)</label>
+          <input type="text" id="cState" required maxlength="2" placeholder="e.g. MI" style="text-transform:uppercase;">
+          <label>Party</label>
+          <select id="cParty">
+            <option>Democrat</option>
+            <option>Republican</option>
+            <option>Independent</option>
+            <option>Libertarian</option>
+            <option>Green</option>
+          </select>
+          <label>Bio</label>
+          <textarea id="cBio" rows="3" placeholder="Your story so far..."></textarea>
+          <label>Avatar URL (optional)</label>
+          <input type="text" id="cAvatar" placeholder="https://...">
+          <label>Theme Song URL (optional)</label>
+          <input type="text" id="cSong" placeholder="https://...">
+          <div class="btn-row">
+            <button type="submit" class="btn red">Enter Politics</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="tab-profile" class="tab-content hidden"></div>
+      <div id="tab-actions" class="tab-content hidden"></div>
+      <div id="tab-elections" class="tab-content hidden"></div>
+      <div id="tab-congress" class="tab-content hidden"></div>
+      <div id="tab-directory" class="tab-content hidden"></div>
+
+    </div>
+  </main>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
