@@ -100,6 +100,77 @@ async function sweepExpiredRaces() {
   return rows.length;
 }
 
+// Election cycle: on Tuesdays and Thursdays (UTC), open House/Senate races for any state
+// that has politicians but no currently-open (or very recently closed) race for that seat,
+// and periodically open a Presidential race. No-ops on other days.
+const CYCLE_DAYS = [2, 4]; // UTC day-of-week: Tuesday=2, Thursday=4
+const RACE_WINDOW_DAYS = 3; // don't reopen a House/Senate seat within this many days of it closing
+const PRESIDENT_WINDOW_DAYS = 14;
+
+async function runElectionCycle() {
+  const today = new Date();
+  if (!CYCLE_DAYS.includes(today.getUTCDay())) {
+    return { ran: false, reason: 'Not an election day (Tuesdays and Thursdays only).', opened: [] };
+  }
+
+  const opened = [];
+  const states = await db.query(
+    `SELECT DISTINCT state FROM politicians WHERE state IS NOT NULL ORDER BY state`
+  );
+
+  for (const { state } of states.rows) {
+    for (const office_type of ['house', 'senate']) {
+      const recent = await db.query(
+        `SELECT id FROM races
+         WHERE office_type = $1 AND state = $2 AND seat_number = 1
+           AND (status = 'open' OR closes_at > now() - interval '${RACE_WINDOW_DAYS} days')
+         LIMIT 1`,
+        [office_type, state]
+      );
+      if (recent.rows.length) continue;
+
+      const closesAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000); // races run for 2 days, next cycle day
+      const { rows } = await db.query(
+        `INSERT INTO races (office_type, state, seat_number, entry_cost_power, closes_at)
+         VALUES ($1, $2, 1, $3, $4) RETURNING *`,
+        [office_type, state, ENTRY_COST[office_type], closesAt]
+      );
+      opened.push(rows[0]);
+    }
+  }
+
+  const recentPresident = await db.query(
+    `SELECT id FROM races
+     WHERE office_type = 'president'
+       AND (status = 'open' OR closes_at > now() - interval '${PRESIDENT_WINDOW_DAYS} days')
+     LIMIT 1`
+  );
+  if (!recentPresident.rows.length && states.rows.length) {
+    const closesAt = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    const { rows } = await db.query(
+      `INSERT INTO races (office_type, state, seat_number, entry_cost_power, closes_at)
+       VALUES ('president', NULL, 1, $1, $2) RETURNING *`,
+      [ENTRY_COST.president, closesAt]
+    );
+    opened.push(rows[0]);
+  }
+
+  return { ran: true, opened };
+}
+
+// Runs the election cycle if it's Tuesday/Thursday. Safe to hit daily (fits Vercel Hobby's
+// once-per-day cron limit) — it no-ops on off days. Admins can also trigger it manually.
+router.all('/cycle', async (req, res) => {
+  try {
+    await sweepExpiredRaces();
+    const result = await runElectionCycle();
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Election cycle failed.' });
+  }
+});
+
 // Vercel Cron (or any external scheduler) hits this to resolve expired races.
 // Lazy resolution on GET /api/races/:id already covers most cases; this is a backstop.
 // Vercel Cron only sends GET requests, so this accepts both GET and POST.

@@ -6,10 +6,10 @@ Node/Express API + Postgres backend, vanilla HTML/CSS/JS frontend (no build step
 
 ## What's new in this pass
 
-- **Rebranded to Statesman**, full noir visual redesign (dark background, gold accents, blue/red used as party-color accents rather than any real party logos or photos).
-- **Landing page** before login: hero, "how it works," a Democrat/Republican split section, and an original SVG Capitol-building illustration — no copyrighted photos or trademarked party logos are used anywhere, since those aren't things I can reproduce.
-- **Admin accounts.** `/api/races/seed` (opening new races) now requires an admin-flagged user instead of being wide open — that was a real gap in v0.1. There's an in-app **Admin** tab (visible only to admin accounts) for opening races without touching the API directly.
-- **`scripts/create-admin.js`** — a one-off script to create or promote an admin account directly in your database.
+- **New visual direction**, inspired directly by the original game's actual UI (dark top nav, light gray body, white cards, circular party badges, illustrated action cards, fixed bottom resource bar). No noir theme anymore. I couldn't use the real screenshots' photos or party logos (copyrighted/trademarked), so everything's rebuilt as original flat-illustration SVGs in the same spirit — Capitol illustrations, action-card art, generic circle-badge party marks.
+- **Funds now accrue hourly too**, not just Power — same lazy-catch-up mechanism, faster while holding office.
+- **Elections now run on a real cycle: every Tuesday and Thursday.** A daily check (admin-triggered manually, or via a once-a-day Vercel Cron job — Hobby-plan compatible) opens House and Senate races for any state with active politicians, and periodically opens a Presidential race, skipping seats that already have a recent/open race so it doesn't spam duplicates.
+- Rebranded to Statesman, admin accounts with a protected race-seeding endpoint, and an Admin tab with both "run the cycle now" and "open a specific race" controls.
 
 ## Creating your admin account
 
@@ -70,9 +70,7 @@ This is now set up to actually run correctly on Vercel (the earlier version used
 4. Run `node scripts/create-admin.js you@example.com "your-password"` from your own machine, pointed at the same `DATABASE_URL`, to create your admin account.
 5. Redeploy.
 
-`vercel.json` is included and handles routing everything (API + static frontend) through the single Express app.
-
-**A note on race resolution and cron:** races auto-resolve the moment anyone views them (`GET /api/races` or `/api/races/:id`) — this covers the vast majority of real usage, since players are the ones checking races. There's also a `GET/POST /api/races/sweep` endpoint that resolves *all* expired races in one pass, meant as a backstop for races nobody's actively viewing. I originally wired this to Vercel Cron running every 5 minutes, but **Vercel's free Hobby plan only allows cron jobs to run once per day** — anything more frequent fails at deploy time (sometimes with a cryptic error rather than a clear one). I removed the cron from `vercel.json` rather than fight that limit. If you want automatic sweeping without upgrading to Vercel Pro, point a free external scheduler (e.g. cron-job.org, or GitHub Actions on a schedule) at `https://your-domain/api/races/sweep` every few minutes — no code changes needed.
+`vercel.json` is included and handles routing everything (API + static frontend) through the single Express app, plus a once-daily cron hitting `/api/races/cycle` at 14:00 UTC — this is within Vercel Hobby's once-per-day limit, and the handler itself no-ops unless it's actually Tuesday or Thursday, so it's safe to leave running every day.
 
 ## API shape
 
@@ -81,6 +79,6 @@ Everything lives under `/api`:
 - `POST /api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `GET /api/auth/me`
 - `POST /api/politicians` (create), `GET /api/politicians/me`, `GET /api/politicians/:id` (public profile), `GET /api/politicians` (directory)
 - `POST /api/actions/rally|ad|fundraise|attack-ad`, `GET /api/actions/log`
-- `GET /api/races`, `GET /api/races/:id`, `POST /api/races/:id/enter`, `POST /api/races/seed` (**admin only**), `GET|POST /api/races/sweep` (used by Vercel Cron)
+- `GET /api/races`, `GET /api/races/:id`, `POST /api/races/:id/enter`, `POST /api/races/seed` (**admin only**, opens one specific race), `GET|POST /api/races/sweep` (resolves expired races), `GET|POST /api/races/cycle` (runs the Tuesday/Thursday election cycle; no-ops on other days)
 - `GET /api/congress/bills`, `GET /api/congress/bills/:id`, `POST /api/congress/bills`, `POST /api/congress/bills/:id/vote`, `POST /api/congress/bills/:id/decide`, `GET /api/congress/roster`
 - `GET /api/feed`

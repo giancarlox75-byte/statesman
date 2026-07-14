@@ -6,5 +6,8 @@
   },
   "rewrites": [
     { "source": "/(.*)", "destination": "/api/index" }
+  ],
+  "crons": [
+    { "path": "/api/races/cycle", "schedule": "0 14 * * *" }
   ]
 }

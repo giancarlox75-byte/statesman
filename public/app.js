@@ -90,10 +90,11 @@ async function boot() {
   if (!state.politician) {
     document.getElementById('noPoliticianNotice').classList.remove('hidden');
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.getElementById('statusBar').textContent = 'STATESMAN';
   } else {
     renderTab(state.activeTab);
+    updateStatusBar();
   }
-  loadTicker();
 }
 
 document.getElementById('createForm').onsubmit = async (e) => {
@@ -146,20 +147,38 @@ async function renderTab(name) {
 }
 
 function fmt(n) { return Math.round(Number(n) * 10) / 10; }
+function fmtMoney(n) { return Math.round(Number(n)).toLocaleString(); }
 
 function partyClass(party) {
-  if (!party) return '';
+  if (!party) return 'other';
   const p = party.toLowerCase();
   if (p.startsWith('dem')) return 'dem';
   if (p.startsWith('rep')) return 'rep';
-  return '';
+  return 'other';
+}
+function partyInitial(party) { return party ? party[0].toUpperCase() : '?'; }
+function partyBadge(party) {
+  return `<span class="party-badge ${partyClass(party)}">${partyInitial(party)}</span>`;
 }
 
 async function refreshPolitician() {
   const me = await api('/politicians/me');
   state.politician = me.politician;
   state.titleHistory = me.titleHistory;
+  updateStatusBar();
   return me;
+}
+
+function updateStatusBar() {
+  const p = state.politician;
+  const bar = document.getElementById('statusBar');
+  if (!p) { bar.textContent = 'STATESMAN'; return; }
+  bar.innerHTML = `
+    <span><b class="power">POWER</b> ${fmt(p.power)}</span>
+    <span><b class="funds">FUNDS</b> $${fmtMoney(p.funds)}</span>
+    <span><b class="influence">STATE INFLUENCE</b> ${fmt(p.state_influence)}%</span>
+    <span><b class="influence">NATIONAL INFLUENCE</b> ${fmt(p.national_influence)}</span>
+  `;
 }
 
 // ---------- Profile ----------
@@ -173,7 +192,7 @@ async function renderProfile(el) {
       <div class="avatar-wrap">${p.avatar_url ? `<img src="${p.avatar_url}" alt="">` : initials}</div>
       <div>
         <p class="pol-name">${p.name}</p>
-        <p class="pol-meta"><span class="party-tag ${partyClass(p.party)}">${p.party}</span> &middot; ${p.state}${p.reputation > 0 ? ` &middot; Reputation ${fmt(p.reputation)}` : ''}</p>
+        <p class="pol-meta"><span class="party-tag ${partyClass(p.party)}">${partyBadge(p.party)} ${p.party}</span> &middot; ${p.state}${p.reputation > 0 ? ` &middot; Reputation ${fmt(p.reputation)}` : ''}</p>
         ${p.current_office ? `<span class="office-badge">${officeLabel(p)}</span>` : `<span class="muted">Not currently holding office</span>`}
         ${p.theme_song ? `<div style="margin-top:8px;"><a href="${p.theme_song}" target="_blank" class="muted">&#9835; Theme song</a></div>` : ''}
       </div>
@@ -182,12 +201,13 @@ async function renderProfile(el) {
 
     <div class="stat-grid">
       <div class="stat"><div class="label">Power</div><div class="value">${fmt(p.power)}</div></div>
-      <div class="stat"><div class="label">Funds</div><div class="value">$${fmt(p.funds)}</div></div>
+      <div class="stat"><div class="label">Funds</div><div class="value">$${fmtMoney(p.funds)}</div></div>
       <div class="stat"><div class="label">State Influence</div><div class="value">${fmt(p.state_influence)}%</div></div>
       <div class="stat"><div class="label">National Influence</div><div class="value">${fmt(p.national_influence)}</div></div>
     </div>
+    <p class="muted">Power and Funds accrue automatically each hour — faster while you hold office.</p>
 
-    <h2 class="section-title" style="margin-top:26px;">Past Titles</h2>
+    <h2 class="section-title" style="margin-top:22px;">Past Titles</h2>
     ${me.titleHistory.length === 0 ? '<p class="muted">No offices held yet. Enter a race to begin your career.</p>' :
       `<table><thead><tr><th>Title</th><th>Seat</th><th>Term Start</th><th>Term End</th></tr></thead><tbody>
         ${me.titleHistory.map(t => `<tr>
@@ -212,23 +232,49 @@ function escapeHtml(s) {
 }
 
 // ---------- Actions ----------
+const ACTION_ART = {
+  rally: `<svg viewBox="0 0 300 84" preserveAspectRatio="xMidYMid slice"><rect width="300" height="84" fill="#EAF1F8"/><circle cx="150" cy="30" r="10" fill="#2E6DA4"/><circle cx="120" cy="38" r="8" fill="#4A8FCB"/><circle cx="180" cy="38" r="8" fill="#4A8FCB"/><circle cx="95" cy="46" r="7" fill="#7FAFD6"/><circle cx="205" cy="46" r="7" fill="#7FAFD6"/><circle cx="70" cy="54" r="6" fill="#A9C7E3"/><circle cx="230" cy="54" r="6" fill="#A9C7E3"/><rect x="145" y="8" width="10" height="16" fill="#B8860B"/></svg>`,
+  ad: `<svg viewBox="0 0 300 84" preserveAspectRatio="xMidYMid slice"><rect width="300" height="84" fill="#F0EDE3"/><rect x="110" y="18" width="80" height="50" rx="3" fill="#fff" stroke="#B8860B" stroke-width="3"/><path d="M120 30 L160 30 M120 42 L175 42 M120 54 L145 54" stroke="#B8860B" stroke-width="3"/></svg>`,
+  fundraise: `<svg viewBox="0 0 300 84" preserveAspectRatio="xMidYMid slice"><rect width="300" height="84" fill="#EFF6EF"/><circle cx="130" cy="46" r="20" fill="none" stroke="#1E8449" stroke-width="3"/><circle cx="165" cy="38" r="20" fill="none" stroke="#4A9564" stroke-width="3"/><text x="130" y="52" font-size="18" text-anchor="middle" fill="#1E8449" font-family="monospace">$</text></svg>`,
+  'attack-ad': `<svg viewBox="0 0 300 84" preserveAspectRatio="xMidYMid slice"><rect width="300" height="84" fill="#FBEDEC"/><path d="M150 14 L172 24 L172 46 Q172 62 150 72 Q128 62 128 46 L128 24 Z" fill="none" stroke="#BE3A34" stroke-width="3"/><path d="M140 40 L150 50 L162 32" stroke="#BE3A34" stroke-width="3" fill="none"/></svg>`,
+};
+
 async function renderActions(el) {
   const p = state.politician;
   el.innerHTML = `
     <h2 class="section-title">Campaign Actions</h2>
     <p class="section-sub">Spend Power and Funds to build State Influence, raise money, or go on the attack.</p>
     <div id="actionMsg"></div>
-    <div class="stat-grid">
-      <div class="stat"><div class="label">Power</div><div class="value">${fmt(p.power)}</div></div>
-      <div class="stat"><div class="label">Funds</div><div class="value">$${fmt(p.funds)}</div></div>
-      <div class="stat"><div class="label">State Influence</div><div class="value">${fmt(p.state_influence)}%</div></div>
+    <div class="action-grid">
+      <div class="action-card">
+        <div class="art">${ACTION_ART.rally}</div>
+        <div class="body">
+          <h3>Hold a Rally</h3>
+          <p>Turn out your base with an in-person event. Builds State Influence.</p>
+          <div class="cost">3 power &middot; $50 &rarr; +1% SI</div>
+          <button class="btn" data-action="rally" style="width:100%;">Hold Rally</button>
+        </div>
+      </div>
+      <div class="action-card">
+        <div class="art">${ACTION_ART.ad}</div>
+        <div class="body">
+          <h3>Run a TV Ad</h3>
+          <p>Buy airtime to reach undecided voters across your state.</p>
+          <div class="cost">1 power &middot; $200 &rarr; +1% SI</div>
+          <button class="btn" data-action="ad" style="width:100%;">Launch Ad</button>
+        </div>
+      </div>
+      <div class="action-card">
+        <div class="art">${ACTION_ART.fundraise}</div>
+        <div class="body">
+          <h3>Fundraise</h3>
+          <p>Work the phones and call in favors from your donor network.</p>
+          <div class="cost">2 power &rarr; ~$150&ndash;300</div>
+          <button class="btn secondary" data-action="fundraise" style="width:100%;">Fundraise</button>
+        </div>
+      </div>
     </div>
-    <div class="btn-row">
-      <button class="btn" data-action="rally">Hold a Rally <span class="muted">(3 power, $50 &rarr; +1% SI)</span></button>
-      <button class="btn" data-action="ad">Run a TV Ad <span class="muted">(1 power, $200 &rarr; +1% SI)</span></button>
-      <button class="btn secondary" data-action="fundraise">Fundraise <span class="muted">(2 power &rarr; ~$150&ndash;300)</span></button>
-    </div>
-    <h2 class="section-title" style="margin-top:24px;">Recent Actions</h2>
+    <h2 class="section-title" style="margin-top:22px;">Recent Actions</h2>
     <div id="actionLog"><p class="muted">Loading&hellip;</p></div>
   `;
   el.querySelectorAll('[data-action]').forEach(btn => {
@@ -238,6 +284,7 @@ async function renderActions(el) {
       try {
         const data = await api('/actions/' + btn.dataset.action, { method: 'POST' });
         state.politician = data.politician;
+        updateStatusBar();
         msg.innerHTML = `<div class="msg success">Done. ${data.gained ? `Raised $${data.gained}.` : ''}</div>`;
         renderActions(el);
       } catch (err) {
@@ -248,7 +295,7 @@ async function renderActions(el) {
   const logData = await api('/actions/log');
   document.getElementById('actionLog').innerHTML = logData.log.length === 0
     ? '<p class="muted">No actions yet.</p>'
-    : logData.log.map(l => `<div class="card"><div class="card-row">
+    : logData.log.map(l => `<div class="card"><div class="card-body card-row">
         <span>${l.detail || l.action_type}</span>
         <span class="muted">${new Date(l.created_at).toLocaleString()}</span>
       </div></div>`).join('');
@@ -263,10 +310,10 @@ async function renderElections(el) {
 
   el.innerHTML = `
     <h2 class="section-title">Open Races</h2>
-    <p class="section-sub">You're based in <strong>${p.state}</strong>. You can enter House/Senate races there, or run for President from anywhere.</p>
+    <p class="section-sub">Elections run every <strong>Tuesday and Thursday</strong>. You're based in <strong>${p.state}</strong> — you can enter House/Senate races there, or run for President from anywhere.</p>
     <div id="electionMsg"></div>
-    <div id="openRaces">${open.length === 0 ? '<p class="muted">No open races right now.</p>' : ''}</div>
-    <h2 class="section-title" style="margin-top:24px;">Recent Results</h2>
+    <div id="openRaces">${open.length === 0 ? '<p class="muted">No open races right now. Check back on the next election day.</p>' : ''}</div>
+    <h2 class="section-title" style="margin-top:22px;">Recent Results</h2>
     <div id="closedRaces">${closed.length === 0 ? '<p class="muted">No races decided yet.</p>' : ''}</div>
   `;
 
@@ -276,7 +323,7 @@ async function renderElections(el) {
     card.className = 'card';
     const eligible = r.office_type === 'president' || r.state === p.state;
     card.innerHTML = `
-      <div class="card-row">
+      <div class="card-body card-row">
         <div>
           <h3>${raceTitle(r)}</h3>
           <div class="muted">Entry cost: ${r.entry_cost_power} power &middot; Closes ${new Date(r.closes_at).toLocaleString()}</div>
@@ -306,7 +353,7 @@ async function renderElections(el) {
   closed.forEach(r => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `<div class="card-row">
+    card.innerHTML = `<div class="card-body card-row">
       <div><h3>${raceTitle(r)}</h3><div class="muted">Closed ${new Date(r.closes_at).toLocaleDateString()}</div></div>
       <span class="office-badge">Winner: #${r.winner_id ?? '—'}</span>
     </div>`;
@@ -321,37 +368,48 @@ function raceTitle(r) {
 }
 
 // ---------- Congress ----------
+const CHAMBER_ART = `<svg viewBox="0 0 600 130" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+  <rect width="600" height="130" fill="#EAF1F8"/>
+  <path d="M180 110 Q300 20 420 110 Z" fill="none" stroke="#2E6DA4" stroke-width="3"/>
+  <g fill="#4A8FCB">
+    <circle cx="220" cy="95" r="6"/><circle cx="245" cy="85" r="6"/><circle cx="270" cy="78" r="6"/><circle cx="300" cy="74" r="6"/><circle cx="330" cy="78" r="6"/><circle cx="355" cy="85" r="6"/><circle cx="380" cy="95" r="6"/>
+    <circle cx="205" cy="108" r="6"/><circle cx="235" cy="100" r="6"/><circle cx="265" cy="94" r="6"/><circle cx="300" cy="90" r="6"/><circle cx="335" cy="94" r="6"/><circle cx="365" cy="100" r="6"/><circle cx="395" cy="108" r="6"/>
+  </g>
+  <rect x="270" y="20" width="60" height="26" fill="#fff" stroke="#B8860B" stroke-width="2"/>
+</svg>`;
+
 async function renderCongress(el) {
   const p = state.politician;
   const [{ bills }, roster] = await Promise.all([api('/congress/bills'), api('/congress/roster')]);
 
   el.innerHTML = `
+    <div class="chamber-hero">${CHAMBER_ART}</div>
     <h2 class="section-title">Congress</h2>
     <div id="congressMsg"></div>
 
     ${p.current_office === 'house' ? `
-      <div class="card">
+      <div class="card"><div class="card-body">
         <h3>Introduce a Bill</h3>
         <label>Title</label><input id="billTitle" placeholder="e.g. Homeless Services Funding Act">
         <label>Description</label><textarea id="billDesc" rows="2"></textarea>
         <div class="btn-row"><button class="btn" id="introduceBillBtn">Introduce Bill</button></div>
-      </div>` : ''}
+      </div></div>` : ''}
 
     <div id="billsList"></div>
 
-    <h2 class="section-title" style="margin-top:26px;">Current Roster</h2>
-    <div style="display:flex; gap:24px; flex-wrap:wrap;">
+    <h2 class="section-title" style="margin-top:22px;">Current Roster</h2>
+    <div style="display:flex; gap:16px; flex-wrap:wrap;">
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>White House</h3>
-        ${roster.president ? `<p><span class="party-tag ${partyClass(roster.president.party)}">${roster.president.name}</span> (${roster.president.party})</p>` : '<p class="muted">Vacant</p>'}
+        ${roster.president ? `<p>${partyBadge(roster.president.party)} ${roster.president.name}</p>` : '<p class="muted">Vacant</p>'}
       </div>
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>Senate</h3>
-        ${roster.senate.length ? roster.senate.map(s => `<p><span class="party-tag ${partyClass(s.party)}">${s.name}</span> — ${s.current_office_state} #${s.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
+        ${roster.senate.length ? roster.senate.map(s => `<p>${partyBadge(s.party)} ${s.name} — ${s.current_office_state} #${s.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
       </div>
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>House</h3>
-        ${roster.house.length ? roster.house.map(h => `<p><span class="party-tag ${partyClass(h.party)}">${h.name}</span> — ${h.current_office_state} #${h.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
+        ${roster.house.length ? roster.house.map(h => `<p>${partyBadge(h.party)} ${h.name} — ${h.current_office_state} #${h.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
       </div>
     </div>
   `;
@@ -383,6 +441,7 @@ async function renderCongress(el) {
     const stageLabels = { house_vote: 'House', senate_vote: 'Senate', president_desk: 'President' };
     const isDone = ['signed', 'vetoed', 'failed'].includes(b.status);
     card.innerHTML = `
+      <div class="card-body">
       <h3>${escapeHtml(b.title)}</h3>
       <p class="muted">${escapeHtml(b.description)}</p>
       <div class="pipeline">
@@ -394,6 +453,7 @@ async function renderCongress(el) {
       </div>
       <div class="muted">House ${b.house_yes}-${b.house_no} &middot; Senate ${b.senate_yes}-${b.senate_no}</div>
       <div class="btn-row" data-vote-row="${b.id}"></div>
+      </div>
     `;
     billsWrap.appendChild(card);
 
@@ -446,7 +506,7 @@ async function renderDirectory(el) {
       <thead><tr><th>Name</th><th>Party</th><th>State</th><th>Office</th><th>National Influence</th></tr></thead>
       <tbody>
         ${politicians.map(p => `<tr>
-          <td>${p.name}</td><td><span class="party-tag ${partyClass(p.party)}">${p.party}</span></td><td>${p.state}</td>
+          <td>${p.name}</td><td>${partyBadge(p.party)} ${p.party}</td><td>${p.state}</td>
           <td>${p.current_office ? officeLabel(p) : '—'}</td>
           <td>${fmt(p.national_influence)}</td>
         </tr>`).join('')}
@@ -458,23 +518,45 @@ async function renderDirectory(el) {
 // ---------- Admin ----------
 async function renderAdmin(el) {
   el.innerHTML = `
-    <h2 class="section-title">Admin — Open a Race</h2>
-    <p class="section-sub">Seeds a new House, Senate, or Presidential race. Visible only to admin accounts.</p>
+    <h2 class="section-title">Admin</h2>
+    <p class="section-sub">Visible only to admin accounts.</p>
     <div id="adminMsg"></div>
-    <label>Office</label>
-    <select id="aOffice">
-      <option value="house">House</option>
-      <option value="senate">Senate</option>
-      <option value="president">President</option>
-    </select>
-    <label>State (2-letter code, leave blank for President)</label>
-    <input id="aState" maxlength="2" placeholder="e.g. MI" style="text-transform:uppercase;">
-    <label>Seat Number</label>
-    <input id="aSeat" type="number" value="1" min="1">
-    <label>Days Open</label>
-    <input id="aDays" type="number" value="7" min="0" step="0.01">
-    <div class="btn-row"><button class="btn" id="seedRaceBtn">Open Race</button></div>
+
+    <div class="card"><div class="card-body">
+      <h3>Election Cycle</h3>
+      <p class="muted">Elections open automatically every Tuesday and Thursday. Trigger a check manually to open any missing races right now (no-ops on other days).</p>
+      <div class="btn-row"><button class="btn" id="runCycleBtn">Run Election Cycle Now</button></div>
+    </div></div>
+
+    <div class="card"><div class="card-body">
+      <h3>Open a Specific Race</h3>
+      <label>Office</label>
+      <select id="aOffice">
+        <option value="house">House</option>
+        <option value="senate">Senate</option>
+        <option value="president">President</option>
+      </select>
+      <label>State (2-letter code, leave blank for President)</label>
+      <input id="aState" maxlength="2" placeholder="e.g. MI" style="text-transform:uppercase;">
+      <label>Seat Number</label>
+      <input id="aSeat" type="number" value="1" min="1">
+      <label>Days Open</label>
+      <input id="aDays" type="number" value="2" min="0" step="0.01">
+      <div class="btn-row"><button class="btn secondary" id="seedRaceBtn">Open Race</button></div>
+    </div></div>
   `;
+  document.getElementById('runCycleBtn').onclick = async () => {
+    const msg = document.getElementById('adminMsg');
+    msg.innerHTML = '';
+    try {
+      const data = await api('/races/cycle');
+      msg.innerHTML = data.ran
+        ? `<div class="msg success">Election cycle ran. Opened ${data.opened.length} race(s).</div>`
+        : `<div class="msg success">${data.reason}</div>`;
+    } catch (err) {
+      msg.innerHTML = `<div class="msg error">${err.message}</div>`;
+    }
+  };
   document.getElementById('seedRaceBtn').onclick = async () => {
     const msg = document.getElementById('adminMsg');
     msg.innerHTML = '';
@@ -494,28 +576,6 @@ async function renderAdmin(el) {
       msg.innerHTML = `<div class="msg error">${err.message}</div>`;
     }
   };
-}
-
-// ---------- Ticker ----------
-async function loadTicker() {
-  try {
-    const { races, bills } = await api('/feed');
-    const items = [];
-    races.forEach(r => {
-      const office = r.office_type === 'president' ? 'the White House' : `${r.office_type === 'senate' ? 'Senate' : 'House'} seat in ${r.state}`;
-      items.push(`<span class="up">&#9650;</span> ${r.name} (${r.party}) wins ${office}`);
-    });
-    bills.forEach(b => {
-      const cls = b.status === 'signed' ? 'up' : 'down';
-      const verb = b.status === 'signed' ? 'signed into law' : b.status === 'vetoed' ? 'vetoed' : 'failed in Congress';
-      items.push(`<span class="${cls}">${b.status === 'signed' ? '&#9650;' : '&#9660;'}</span> "${b.title}" ${verb}`);
-    });
-    document.getElementById('tickerTrack').innerHTML = items.length
-      ? items.map(i => `<span>${i}</span>`).join('')
-      : 'Welcome to Statesman. The wire is quiet — go make some news.';
-  } catch (err) {
-    document.getElementById('tickerTrack').textContent = 'Welcome to Statesman.';
-  }
 }
 
 // ---------- Init ----------
