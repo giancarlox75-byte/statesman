@@ -11,9 +11,29 @@ const api = async (path, opts = {}) => {
 
 let state = { user: null, politician: null, mode: 'login', activeTab: 'profile' };
 
-// ---------- Auth screen ----------
-const authScreen = document.getElementById('authScreen');
+// ---------- Screens ----------
+const landing = document.getElementById('landing');
+const authOverlay = document.getElementById('authOverlay');
 const appScreen = document.getElementById('app');
+
+function showLanding() {
+  landing.classList.remove('hidden');
+  authOverlay.classList.add('hidden');
+  appScreen.classList.add('hidden');
+}
+function openAuthModal(mode) {
+  setAuthMode(mode);
+  authOverlay.classList.remove('hidden');
+}
+function closeAuthModal() { authOverlay.classList.add('hidden'); }
+
+document.getElementById('landingSignIn').onclick = () => openAuthModal('login');
+document.getElementById('heroSignIn').onclick = () => openAuthModal('login');
+document.getElementById('heroCreateAccount').onclick = () => openAuthModal('register');
+document.getElementById('finalCreateAccount').onclick = () => openAuthModal('register');
+document.getElementById('authClose').onclick = closeAuthModal;
+authOverlay.addEventListener('click', (e) => { if (e.target === authOverlay) closeAuthModal(); });
+
 const authForm = document.getElementById('authForm');
 const authMsg = document.getElementById('authMsg');
 const authSubmit = document.getElementById('authSubmit');
@@ -36,6 +56,7 @@ authForm.onsubmit = async (e) => {
       method: 'POST', body: JSON.stringify({ email, password })
     });
     state.user = data.user;
+    closeAuthModal();
     await boot();
   } catch (err) {
     authMsg.innerHTML = `<div class="msg error">${err.message}</div>`;
@@ -57,9 +78,14 @@ async function boot() {
   } catch (err) {
     state.politician = null;
   }
-  authScreen.classList.add('hidden');
+  landing.classList.add('hidden');
+  authOverlay.classList.add('hidden');
   appScreen.classList.remove('hidden');
   document.getElementById('whoami').textContent = state.user?.email || '';
+
+  const adminTab = document.getElementById('adminTab');
+  if (state.user?.is_admin) adminTab.classList.remove('hidden');
+  else adminTab.classList.add('hidden');
 
   if (!state.politician) {
     document.getElementById('noPoliticianNotice').classList.remove('hidden');
@@ -69,6 +95,7 @@ async function boot() {
   }
   loadTicker();
 }
+
 document.getElementById('createForm').onsubmit = async (e) => {
   e.preventDefault();
   const msg = document.getElementById('createMsg');
@@ -94,7 +121,7 @@ document.getElementById('createForm').onsubmit = async (e) => {
 // ---------- Tabs ----------
 document.getElementById('tabs').addEventListener('click', (e) => {
   const tab = e.target.closest('.tab');
-  if (!tab) return;
+  if (!tab || tab.classList.contains('hidden')) return;
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   tab.classList.add('active');
   state.activeTab = tab.dataset.tab;
@@ -112,12 +139,21 @@ async function renderTab(name) {
     else if (name === 'elections') await renderElections(el);
     else if (name === 'congress') await renderCongress(el);
     else if (name === 'directory') await renderDirectory(el);
+    else if (name === 'admin') await renderAdmin(el);
   } catch (err) {
     el.innerHTML = `<div class="msg error">${err.message}</div>`;
   }
 }
 
 function fmt(n) { return Math.round(Number(n) * 10) / 10; }
+
+function partyClass(party) {
+  if (!party) return '';
+  const p = party.toLowerCase();
+  if (p.startsWith('dem')) return 'dem';
+  if (p.startsWith('rep')) return 'rep';
+  return '';
+}
 
 async function refreshPolitician() {
   const me = await api('/politicians/me');
@@ -137,12 +173,12 @@ async function renderProfile(el) {
       <div class="avatar-wrap">${p.avatar_url ? `<img src="${p.avatar_url}" alt="">` : initials}</div>
       <div>
         <p class="pol-name">${p.name}</p>
-        <p class="pol-meta">${p.party} &middot; ${p.state}${p.reputation > 0 ? ` &middot; Reputation ${fmt(p.reputation)}` : ''}</p>
+        <p class="pol-meta"><span class="party-tag ${partyClass(p.party)}">${p.party}</span> &middot; ${p.state}${p.reputation > 0 ? ` &middot; Reputation ${fmt(p.reputation)}` : ''}</p>
         ${p.current_office ? `<span class="office-badge">${officeLabel(p)}</span>` : `<span class="muted">Not currently holding office</span>`}
         ${p.theme_song ? `<div style="margin-top:8px;"><a href="${p.theme_song}" target="_blank" class="muted">&#9835; Theme song</a></div>` : ''}
       </div>
     </div>
-    ${p.bio ? `<p style="font-style:italic; color:var(--ink-soft);">"${escapeHtml(p.bio)}"</p>` : ''}
+    ${p.bio ? `<p style="font-style:italic; color:var(--ink-dim);">"${escapeHtml(p.bio)}"</p>` : ''}
 
     <div class="stat-grid">
       <div class="stat"><div class="label">Power</div><div class="value">${fmt(p.power)}</div></div>
@@ -190,7 +226,7 @@ async function renderActions(el) {
     <div class="btn-row">
       <button class="btn" data-action="rally">Hold a Rally <span class="muted">(3 power, $50 &rarr; +1% SI)</span></button>
       <button class="btn" data-action="ad">Run a TV Ad <span class="muted">(1 power, $200 &rarr; +1% SI)</span></button>
-      <button class="btn gold" data-action="fundraise">Fundraise <span class="muted">(2 power &rarr; ~$150&ndash;300)</span></button>
+      <button class="btn secondary" data-action="fundraise">Fundraise <span class="muted">(2 power &rarr; ~$150&ndash;300)</span></button>
     </div>
     <h2 class="section-title" style="margin-top:24px;">Recent Actions</h2>
     <div id="actionLog"><p class="muted">Loading&hellip;</p></div>
@@ -245,7 +281,7 @@ async function renderElections(el) {
           <h3>${raceTitle(r)}</h3>
           <div class="muted">Entry cost: ${r.entry_cost_power} power &middot; Closes ${new Date(r.closes_at).toLocaleString()}</div>
         </div>
-        <button class="btn ${eligible ? 'red' : 'secondary'}" ${eligible ? '' : 'disabled'} data-enter="${r.id}">
+        <button class="btn ${eligible ? '' : 'secondary'}" ${eligible ? '' : 'disabled'} data-enter="${r.id}">
           ${eligible ? 'Enter Race' : 'Not eligible'}
         </button>
       </div>`;
@@ -298,7 +334,7 @@ async function renderCongress(el) {
         <h3>Introduce a Bill</h3>
         <label>Title</label><input id="billTitle" placeholder="e.g. Homeless Services Funding Act">
         <label>Description</label><textarea id="billDesc" rows="2"></textarea>
-        <div class="btn-row"><button class="btn red" id="introduceBillBtn">Introduce Bill</button></div>
+        <div class="btn-row"><button class="btn" id="introduceBillBtn">Introduce Bill</button></div>
       </div>` : ''}
 
     <div id="billsList"></div>
@@ -307,15 +343,15 @@ async function renderCongress(el) {
     <div style="display:flex; gap:24px; flex-wrap:wrap;">
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>White House</h3>
-        ${roster.president ? `<p>${roster.president.name} (${roster.president.party})</p>` : '<p class="muted">Vacant</p>'}
+        ${roster.president ? `<p><span class="party-tag ${partyClass(roster.president.party)}">${roster.president.name}</span> (${roster.president.party})</p>` : '<p class="muted">Vacant</p>'}
       </div>
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>Senate</h3>
-        ${roster.senate.length ? roster.senate.map(s => `<p>${s.name} — ${s.current_office_state} #${s.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
+        ${roster.senate.length ? roster.senate.map(s => `<p><span class="party-tag ${partyClass(s.party)}">${s.name}</span> — ${s.current_office_state} #${s.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
       </div>
       <div class="roster-col" style="flex:1; min-width:200px;">
         <h3>House</h3>
-        ${roster.house.length ? roster.house.map(h => `<p>${h.name} — ${h.current_office_state} #${h.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
+        ${roster.house.length ? roster.house.map(h => `<p><span class="party-tag ${partyClass(h.party)}">${h.name}</span> — ${h.current_office_state} #${h.current_office_seat}</p>`).join('') : '<p class="muted">Vacant</p>'}
       </div>
     </div>
   `;
@@ -367,7 +403,7 @@ async function renderCongress(el) {
     } else if (b.status === 'senate_vote' && p.current_office === 'senate') {
       row.innerHTML = `<button class="btn" data-vote="${b.id}:yes">Vote Yes</button><button class="btn secondary" data-vote="${b.id}:no">Vote No</button>`;
     } else if (b.status === 'president_desk' && p.current_office === 'president') {
-      row.innerHTML = `<button class="btn red" data-decide="${b.id}:sign">Sign</button><button class="btn secondary" data-decide="${b.id}:veto">Veto</button>`;
+      row.innerHTML = `<button class="btn" data-decide="${b.id}:sign">Sign</button><button class="btn secondary" data-decide="${b.id}:veto">Veto</button>`;
     }
   });
 
@@ -410,13 +446,54 @@ async function renderDirectory(el) {
       <thead><tr><th>Name</th><th>Party</th><th>State</th><th>Office</th><th>National Influence</th></tr></thead>
       <tbody>
         ${politicians.map(p => `<tr>
-          <td>${p.name}</td><td>${p.party}</td><td>${p.state}</td>
+          <td>${p.name}</td><td><span class="party-tag ${partyClass(p.party)}">${p.party}</span></td><td>${p.state}</td>
           <td>${p.current_office ? officeLabel(p) : '—'}</td>
           <td>${fmt(p.national_influence)}</td>
         </tr>`).join('')}
       </tbody>
     </table>
   `;
+}
+
+// ---------- Admin ----------
+async function renderAdmin(el) {
+  el.innerHTML = `
+    <h2 class="section-title">Admin — Open a Race</h2>
+    <p class="section-sub">Seeds a new House, Senate, or Presidential race. Visible only to admin accounts.</p>
+    <div id="adminMsg"></div>
+    <label>Office</label>
+    <select id="aOffice">
+      <option value="house">House</option>
+      <option value="senate">Senate</option>
+      <option value="president">President</option>
+    </select>
+    <label>State (2-letter code, leave blank for President)</label>
+    <input id="aState" maxlength="2" placeholder="e.g. MI" style="text-transform:uppercase;">
+    <label>Seat Number</label>
+    <input id="aSeat" type="number" value="1" min="1">
+    <label>Days Open</label>
+    <input id="aDays" type="number" value="7" min="0" step="0.01">
+    <div class="btn-row"><button class="btn" id="seedRaceBtn">Open Race</button></div>
+  `;
+  document.getElementById('seedRaceBtn').onclick = async () => {
+    const msg = document.getElementById('adminMsg');
+    msg.innerHTML = '';
+    try {
+      const office_type = document.getElementById('aOffice').value;
+      const data = await api('/races/seed', {
+        method: 'POST',
+        body: JSON.stringify({
+          office_type,
+          state: document.getElementById('aState').value.trim().toUpperCase() || undefined,
+          seat_number: Number(document.getElementById('aSeat').value) || 1,
+          days_open: Number(document.getElementById('aDays').value),
+        })
+      });
+      msg.innerHTML = `<div class="msg success">Race #${data.race.id} opened.</div>`;
+    } catch (err) {
+      msg.innerHTML = `<div class="msg error">${err.message}</div>`;
+    }
+  };
 }
 
 // ---------- Ticker ----------
@@ -435,9 +512,9 @@ async function loadTicker() {
     });
     document.getElementById('tickerTrack').innerHTML = items.length
       ? items.map(i => `<span>${i}</span>`).join('')
-      : 'Welcome to POWER. The wire is quiet — go make some news.';
+      : 'Welcome to Statesman. The wire is quiet — go make some news.';
   } catch (err) {
-    document.getElementById('tickerTrack').textContent = 'Welcome to POWER.';
+    document.getElementById('tickerTrack').textContent = 'Welcome to Statesman.';
   }
 }
 
@@ -448,6 +525,6 @@ async function loadTicker() {
     state.user = sess.user;
     await boot();
   } catch (err) {
-    authScreen.classList.remove('hidden');
+    showLanding();
   }
 })();

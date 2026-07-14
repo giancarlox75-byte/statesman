@@ -60,7 +60,7 @@ router.post('/logout', (req, res) => {
 });
 
 router.get('/me', requireAuth, async (req, res) => {
-  const { rows } = await db.query('SELECT id, email FROM users WHERE id = $1', [req.userId]);
+  const { rows } = await db.query('SELECT id, email, is_admin FROM users WHERE id = $1', [req.userId]);
   if (!rows.length) return res.status(401).json({ error: 'Not authenticated' });
   res.json({ user: rows[0] });
 });

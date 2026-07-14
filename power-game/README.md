@@ -1,48 +1,76 @@
-# POWER — a political simulation (v0.1)
+# STATESMAN — a political simulation (v0.2)
 
 A spiritual revival of the old *Power* browser game by Oppressive Games: run for House, Senate, or President, build State/National Influence, campaign with rallies and ads, pass bills through a full House → Senate → President pipeline, and track your career on a public profile page.
 
-This is a working prototype: Node/Express API + Postgres, with a vanilla HTML/CSS/JS frontend (no build step).
+Node/Express API + Postgres backend, vanilla HTML/CSS/JS frontend (no build step), dark noir visual style with a landing page.
+
+## What's new in this pass
+
+- **Rebranded to Statesman**, full noir visual redesign (dark background, gold accents, blue/red used as party-color accents rather than any real party logos or photos).
+- **Landing page** before login: hero, "how it works," a Democrat/Republican split section, and an original SVG Capitol-building illustration — no copyrighted photos or trademarked party logos are used anywhere, since those aren't things I can reproduce.
+- **Admin accounts.** `/api/races/seed` (opening new races) now requires an admin-flagged user instead of being wide open — that was a real gap in v0.1. There's an in-app **Admin** tab (visible only to admin accounts) for opening races without touching the API directly.
+- **`scripts/create-admin.js`** — a one-off script to create or promote an admin account directly in your database.
+
+## Creating your admin account
+
+Run this against whichever database `DATABASE_URL` points at (works the same locally or against Neon):
+
+```bash
+node scripts/create-admin.js you@example.com "choose-your-own-password"
+```
+
+Don't paste real passwords into chat with me going forward — run this locally/in your own terminal and I'll never see it. If you ever do paste a real credential anywhere, rotate it immediately.
+
+This creates the account if it doesn't exist, or promotes + resets the password if it does. Once logged in with that account, you'll see an **Admin** tab in the app for opening new races.
 
 ## What's built
 
-- **Auth** — email/password, JWT in an httpOnly cookie.
+- **Auth** — email/password, JWT in an httpOnly cookie, admin flag on the user record.
 - **Politicians** — one character per account: name, party, home state, bio, avatar URL, theme song link, public profile page with title history.
 - **Resources** — Power (accrues over time, faster in office, soft cap at 50 like the original game), Funds, State Influence, National Influence, Reputation.
 - **Campaign actions** — Rally, TV Ad, Fundraise, Attack Ad (with a chance of backfiring, like the original).
-- **Elections** — House and Senate races are per-state/per-seat; President is national. Races auto-resolve when their close time passes (both lazily, on request, and via a background sweep every 30s — no cron setup needed). Winners take the seat, past officeholders roll into title history.
+- **Elections** — House and Senate races are per-state/per-seat; President is national. Races auto-resolve when their close time passes — lazily on request, and via `/api/races/sweep`, which Vercel Cron hits every 5 minutes so races resolve even with zero traffic.
 - **Congress** — sitting House members introduce bills; House votes; passing bills move to the Senate; passing Senate bills land on the President's desk to sign or veto.
 - **Wire feed** — a scrolling ticker of recent election results and bill outcomes.
+- **Admin tooling** — protected race-seeding, gated by an `is_admin` flag checked against the database on every request (so revoking admin takes effect immediately, not just on next login).
 
-## What's not built yet (ideas for next passes)
+## What's not built yet
 
-- The **stock market** / player-run corporations from the original game — this is the single biggest missing piece and probably the next thing to build.
-- Parties/caucuses as first-class objects (right now "party" is just a text field).
-- Multiple countries (the original supported UK/Canada/Australia parliaments too).
+- The **stock market** / player-run corporations from the original game — still the biggest missing piece.
+- Parties/caucuses as first-class objects (right now "party" is a text field).
+- Multiple countries (original supported UK/Canada/Australia parliaments too).
 - Cabinet appointments by the President.
-- A real "term" / re-election cycle — right now races are seeded manually via `/api/races/seed`; there's no auto-scheduling of the next cycle.
-- Profile pictures/theme songs are just URLs right now, no upload/hosting.
+- Auto-scheduled election cycles — races are currently opened manually via the Admin tab; there's no recurring "next term opens automatically" logic yet.
+- Real avatar/audio hosting — avatar and theme song are just URL fields right now.
 
 ## Running it locally
 
-Requirements: Node 18+, a Postgres database (local or hosted, e.g. Neon — same setup you used for Northpeak).
+Requirements: Node 18+, a Postgres database (local or hosted, e.g. Neon).
 
 ```bash
-cd power-game
 npm install
 cp .env.example .env   # fill in your DATABASE_URL and a real JWT_SECRET
 psql "$DATABASE_URL" -f src/schema.sql
+node scripts/create-admin.js you@example.com "your-password"
 npm start
 ```
 
-Then open `http://localhost:3001`.
+Open `http://localhost:3001`.
 
-### Scripts
+## Deploying to Vercel
 
-Add this to `package.json` if you want a `npm start`:
-```json
-"scripts": { "start": "node src/server.js" }
-```
+This is now set up to actually run correctly on Vercel (the earlier version used `app.listen()`, which doesn't behave as a normal server on serverless — that's fixed):
+
+1. Push this code to your repo / redeploy your Vercel project from it.
+2. Vercel → Project Settings → Environment Variables → add `DATABASE_URL` (your Neon pooled connection string) and `JWT_SECRET`.
+3. Run `schema.sql` against your Neon database (Neon's SQL Editor, or `psql` from your machine) if you haven't already — and re-run it after this update, since it adds an `is_admin` column:
+   ```sql
+   ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+   ```
+4. Run `node scripts/create-admin.js you@example.com "your-password"` from your own machine, pointed at the same `DATABASE_URL`, to create your admin account.
+5. Redeploy.
+
+`vercel.json` is included and handles routing everything (API + static frontend) through the single Express app, plus a cron job hitting `/api/races/sweep` every 5 minutes so races resolve without needing traffic.
 
 ## API shape
 
@@ -51,14 +79,6 @@ Everything lives under `/api`:
 - `POST /api/auth/register`, `/api/auth/login`, `/api/auth/logout`, `GET /api/auth/me`
 - `POST /api/politicians` (create), `GET /api/politicians/me`, `GET /api/politicians/:id` (public profile), `GET /api/politicians` (directory)
 - `POST /api/actions/rally|ad|fundraise|attack-ad`, `GET /api/actions/log`
-- `GET /api/races`, `GET /api/races/:id`, `POST /api/races/:id/enter`, `POST /api/races/seed` (dev helper — no auth wall yet, lock this down before going public)
+- `GET /api/races`, `GET /api/races/:id`, `POST /api/races/:id/enter`, `POST /api/races/seed` (**admin only**), `GET|POST /api/races/sweep` (used by Vercel Cron)
 - `GET /api/congress/bills`, `GET /api/congress/bills/:id`, `POST /api/congress/bills`, `POST /api/congress/bills/:id/vote`, `POST /api/congress/bills/:id/decide`, `GET /api/congress/roster`
 - `GET /api/feed`
-
-## A note on `/api/races/seed`
-
-Right now anyone can hit this to create a race — it's there so you (or I) can test the loop without building an admin panel first. Before you show this to real players, put it behind an admin check or a scheduled job that opens new races automatically (e.g. new House races open every N days per state).
-
-## Deploying
-
-Same shape as Northpeak: push to Vercel (or wherever), point `DATABASE_URL` at a Neon Postgres instance, run `schema.sql` against it once, set a real `JWT_SECRET`. The frontend is static files served by Express, so no separate frontend deploy needed.

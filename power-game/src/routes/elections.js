@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireAdmin } = require('../middleware/auth');
 const { reconcilePower } = require('../engine/power');
 
 const router = express.Router();
@@ -163,8 +163,8 @@ router.post('/:id/enter', requireAuth, async (req, res) => {
   }
 });
 
-// Seed / open a new race (kept open, no auth wall — this is a dev/admin helper for the prototype)
-router.post('/seed', async (req, res) => {
+// Seed / open a new race — admin only.
+router.post('/seed', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { office_type, state, seat_number, days_open } = req.body;
     if (!['house', 'senate', 'president'].includes(office_type)) {

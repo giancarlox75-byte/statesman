@@ -29,7 +29,7 @@ app.get('/api/health', (req, res) => res.json({ ok: true }));
 const PORT = process.env.PORT || 3001;
 
 if (require.main === module) {
-  app.listen(PORT, () => console.log(`POWER server running on port ${PORT}`));
+  app.listen(PORT, () => console.log(`STATESMAN server running on port ${PORT}`));
 
   // Background sweep: close out any races whose closes_at has passed, even with no traffic.
   // Only meaningful for a long-running process (local dev / a real server), not serverless.
