@@ -1,14 +1,11 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "src/server.js",
-      "use": "@vercel/node",
-      "config": { "includeFiles": ["public/**"] }
+  "functions": {
+    "api/index.js": {
+      "includeFiles": "public/**"
     }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "src/server.js" }
+  },
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/api/index" }
   ],
   "crons": [
     { "path": "/api/races/sweep", "schedule": "*/5 * * * *" }
