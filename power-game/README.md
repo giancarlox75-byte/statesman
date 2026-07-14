@@ -70,7 +70,9 @@ This is now set up to actually run correctly on Vercel (the earlier version used
 4. Run `node scripts/create-admin.js you@example.com "your-password"` from your own machine, pointed at the same `DATABASE_URL`, to create your admin account.
 5. Redeploy.
 
-`vercel.json` is included and handles routing everything (API + static frontend) through the single Express app, plus a cron job hitting `/api/races/sweep` every 5 minutes so races resolve without needing traffic.
+`vercel.json` is included and handles routing everything (API + static frontend) through the single Express app.
+
+**A note on race resolution and cron:** races auto-resolve the moment anyone views them (`GET /api/races` or `/api/races/:id`) — this covers the vast majority of real usage, since players are the ones checking races. There's also a `GET/POST /api/races/sweep` endpoint that resolves *all* expired races in one pass, meant as a backstop for races nobody's actively viewing. I originally wired this to Vercel Cron running every 5 minutes, but **Vercel's free Hobby plan only allows cron jobs to run once per day** — anything more frequent fails at deploy time (sometimes with a cryptic error rather than a clear one). I removed the cron from `vercel.json` rather than fight that limit. If you want automatic sweeping without upgrading to Vercel Pro, point a free external scheduler (e.g. cron-job.org, or GitHub Actions on a schedule) at `https://your-domain/api/races/sweep` every few minutes — no code changes needed.
 
 ## API shape
 
