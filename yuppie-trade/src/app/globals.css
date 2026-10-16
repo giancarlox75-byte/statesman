@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+/*
+ * Yuppie Trade design tokens.
+ * Colors come straight from the brand spec. Green/red are reserved for
+ * financial state (gain/loss, healthy/failed) — not decoration.
+ */
+@theme {
+  --color-bg: #0b0d10;
+  --color-card: #13171e;
+  --color-elevated: #1b212a;
+  --color-line: #292f39;
+  --color-line-strong: #3a414d;
+  --color-fg: #ffffff;
+  --color-muted: #a8b0bc;
+  --color-subtle: #7d8693;
+  --color-pos: #39d98a;
+  --color-pos-ink: #062615;
+  --color-neg: #f06b75;
+  --color-warn: #e8b85c;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-card: 0 1px 0 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -12px rgb(0 0 0 / 0.6);
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "cv11";
+  }
+  ::selection {
+    background: rgb(57 217 138 / 0.3);
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-pos);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Faint grid + single soft green wash behind the hero. Kept deliberately subtle. */
+.hero-backdrop {
+  background:
+    radial-gradient(60% 50% at 70% 35%, rgb(57 217 138 / 0.08), transparent 70%),
+    linear-gradient(to bottom, transparent, var(--color-bg) 92%),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 64px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
