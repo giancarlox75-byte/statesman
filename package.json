@@ -1,11 +1,12 @@
 {
   "name": "statesman",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "A persistent multiplayer political simulation.",
+  "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "init-db": "node scripts/init-db.js",
+    "create-admin": "node scripts/create-admin.js"
   },
   "keywords": [],
   "author": "",

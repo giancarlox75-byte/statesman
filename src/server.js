@@ -5,11 +5,10 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
-const politicianRoutes = require('./routes/politicians');
-const actionRoutes = require('./routes/actions');
-const electionRoutes = require('./routes/elections');
-const congressRoutes = require('./routes/congress');
-const feedRoutes = require('./routes/feed');
+const gameRoutes = require('./routes/game');
+const adminRoutes = require('./routes/admin');
+const { worldTick } = require('./engine/tick');
+const { seedWorld } = require('./engine/seed');
 
 const app = express();
 app.use(cors({ origin: true, credentials: true }));
@@ -17,25 +16,33 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Make sure the world exists, then keep its clocks moving on API traffic.
+let ready = null;
+app.use('/api', async (req, res, next) => {
+  try {
+    ready = ready || seedWorld();
+    await ready;
+    await worldTick();
+  } catch (err) {
+    ready = null;
+    console.error('World tick failed:', err);
+  }
+  next();
+});
+
 app.use('/api/auth', authRoutes);
-app.use('/api/politicians', politicianRoutes);
-app.use('/api/actions', actionRoutes);
-app.use('/api/races', electionRoutes);
-app.use('/api/congress', congressRoutes);
-app.use('/api/feed', feedRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api', gameRoutes);
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Vercel Cron keeps the world moving with zero traffic (the middleware above already ticked).
+app.get('/api/cron/tick', (req, res) => res.json({ ok: true }));
 
 const PORT = process.env.PORT || 3001;
 
 if (require.main === module) {
   app.listen(PORT, () => console.log(`STATESMAN server running on port ${PORT}`));
-
-  // Background sweep: close out any races whose closes_at has passed, even with no traffic.
-  // Only meaningful for a long-running process (local dev / a real server), not serverless.
-  setInterval(() => {
-    electionRoutes.sweepExpiredRaces().catch(err => console.error('Sweep failed:', err));
-  }, 30 * 1000);
+  setInterval(() => worldTick().catch(err => console.error('Tick failed:', err)), 30 * 1000);
 }
 
 module.exports = app;

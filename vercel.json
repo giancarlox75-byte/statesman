@@ -8,6 +8,6 @@
     { "source": "/(.*)", "destination": "/api/index" }
   ],
   "crons": [
-    { "path": "/api/races/cycle", "schedule": "0 14 * * *" }
+    { "path": "/api/cron/tick", "schedule": "0 14 * * *" }
   ]
 }
